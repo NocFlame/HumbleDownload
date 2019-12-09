@@ -1,0 +1,1 @@
+{"csrf_cookie": "SOME_TEXT_HERE", "_simpleauth_sess": "JWT_HERE", "__ssid": "SOMETHING", "_pxvid": "SOMETHING", "__stripe_mid": "SOMETHING", "_px3": "TEXT_HERE", "hmb_source": "navbar", "hbreqsec": "True", "hbflash": "None"}

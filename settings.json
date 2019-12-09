@@ -1,0 +1,10 @@
+{
+    "WINDOWS": {
+        "DOWNLOAD_TEMP_PATH":"",
+        "DOWNLOAD_PATH":""
+    },
+    "LINUX": {
+        "DOWNLOAD_TEMP_PATH":"",
+        "DOWNLOAD_PATH":""
+    }
+}
