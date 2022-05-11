@@ -81,16 +81,20 @@ def get_library(): # First request that includes the keys for further polling
 
 def extract_keys_from_library(library_res):
     #print(library_res)
-    pos0 = str(library_res.content).find("gamekeys") + 13
+    pos0 = str(library_res.content).find('<script id="user-home-json-data" type="application/json">') + 57 + 4 #len(str) + '\\n '
     #print(pos0)
-    pos1 = str(library_res.content).find("hasAdmin") - 9
+    pos1 = str(library_res.content).find("</script>", pos0) - 2 #\\n
     #print(pos1)
-    raw_keys = str(library_res.content)[pos0:pos1]
+    raw_user_json = str(library_res.content)[pos0:pos1]
+    raw_user_json = raw_user_json.replace('\\"',"")
+    raw_user_json = raw_user_json.replace("\\","")
+    print(raw_user_json)
+    json_object = json.loads(raw_user_json)
     #print(raw_keys)
-    raw_keys = raw_keys.replace("\"","")
-    raw_keys = raw_keys.replace(" ","")
+    #raw_keys = raw_keys.replace("\"","")
+    #raw_keys = raw_keys.replace(" ","")
     #print(raw_keys)
-    keys = str(raw_keys).split(",")
+    keys = json_object['gamekeys'] #str(raw_keys).split(",")
     #print(keys)
     return keys
 
