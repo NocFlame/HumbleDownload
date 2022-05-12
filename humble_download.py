@@ -88,7 +88,7 @@ def extract_keys_from_library(library_res):
     raw_user_json = str(library_res.content)[pos0:pos1]
     raw_user_json = raw_user_json.replace('\\"',"")
     raw_user_json = raw_user_json.replace("\\","")
-    print(raw_user_json)
+    #print(raw_user_json)
     json_object = json.loads(raw_user_json)
     #print(raw_keys)
     #raw_keys = raw_keys.replace("\"","")
