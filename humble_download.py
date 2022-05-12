@@ -339,9 +339,12 @@ def handle_MD5check(PATH, mname, name, md5):
         md5_no_match_list.append(mname)
 
 def assure_path_exists(path):
+    if not path.endswith("/"):
+        path += "/"
     dir = os.path.dirname(path)
     if not os.path.exists(dir):
         os.makedirs(dir)
+
 def handle_args(args):
     if args.verbose:
         print("Verbose output enabled")
