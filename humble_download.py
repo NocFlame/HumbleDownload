@@ -184,7 +184,7 @@ def md5check(filepath, filename, org_checksum):
             #print("MD5 verified.")
             return True
         else:
-            #colorize("MD5 verification failed!.", "red")
+            colorize("MD5 verification failed!.", "red")
             return False
     except OSError as identifier:
         raise OSError('MD5check failure, details: "{id}"'.format(id=identifier))
@@ -200,7 +200,7 @@ def sha1check(filepath, filename, org_checksum):
             #print("SHA1 verified.")
             return True
         else:
-            #colorize("SHA1 verification failed!.", "red")
+            colorize("SHA1 verification failed!.", "red")
             return False
     except OSError as identifier:
         raise OSError('SHA1check failure, details: "{id}"'.format(id=identifier))
