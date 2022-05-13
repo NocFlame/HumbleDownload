@@ -305,11 +305,14 @@ def loop_through_list_until_empty(name_of_list, filetype, max_retires=3):
             for machine_name in name_of_list:
                 print("Trying to download file: " + machine_name)
                 file_info = download(DOWNLOAD_TEMP_PATH, machine_name, filetype)
-                res = checksum_file(file_info)
-                if res:
-                    shutil.move(join(DOWNLOAD_TEMP_PATH, machine_name), join(join(PATH, filetype), machine_name + "." + filetype))
-                    name_of_list.remove(machine_name)
-                    i = 0
+                if file_info:
+                    res = checksum_file(file_info)
+                    if res:
+                        shutil.move(join(DOWNLOAD_TEMP_PATH, machine_name), join(join(PATH, filetype), machine_name + "." + filetype))
+                        name_of_list.remove(machine_name)
+                        i = 0
+                    else:
+                        colorize("FAILED to download: ".format(machine_name), "red")
                 else:
                     colorize("FAILED to download: ".format(machine_name), "red")
                 print("There are {} files left to download".format(len(name_of_list)))
