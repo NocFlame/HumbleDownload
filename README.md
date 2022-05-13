@@ -33,6 +33,9 @@ To choose what files to download (default is mobi,pdf,epub and zip), comment out
 
 In no particular order there is lot of room for improvements and here are some of the ideas that possible will be implemented sometime
 
+- Print verbose mode output
+- print errors to logfile
+- add always print checksum errors to verbose and print error file
 - Print out menu
 - menu system ->
   - --verify filename only,
