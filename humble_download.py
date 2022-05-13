@@ -184,12 +184,14 @@ def md5check(filepath, filename, org_checksum):
         calculated_md5 = calculate_md5(file_name)
         # Finally compare original MD5 with freshly calculated
         if original_md5 == calculated_md5:
-            #print("MD5 verified.")
-            return True
+            if VERBOSE:
+                print("MD5 verified.")
+            md5res = {"verdict": True, "checksum_org": original_md5, "checksum_calc": calculated_md5}
+            return md5res
         else:
-            colorize("MD5 verification failed!.", "red")
-            log_error("MD5 verification failed!", filepath, filename, original_md5, calculated_md5)
-            return False
+            colorize("MD5 verification failed!", "red")
+            md5res = {"verdict": False, "checksum_org": original_md5, "checksum_calc": calculated_md5}
+            return md5res
     except OSError as identifier:
         raise OSError('MD5check failure, details: "{id}"'.format(id=identifier))
 
@@ -201,12 +203,14 @@ def sha1check(filepath, filename, org_checksum):
         calculated_sha1 = calculate_sha1(file_name)
         # Finally compare original SHA1 with freshly calculated
         if original_sha1 == calculated_sha1:
-            #print("SHA1 verified.")
-            return True
+            if VERBOSE:
+                print("SHA1 verified.")
+            sha1res = {"verdict": True, "checksum_org": original_sha1, "checksum_calc": calculated_sha1}
+            return sha1res
         else:
-            colorize("SHA1 verification failed!.", "red")
-            log_error("SHA1 verification failed!", filepath, filename, original_sha1, calculated_sha1)
-            return False
+            colorize("SHA1 verification failed!", "red")
+            sha1res = {"verdict": False, "checksum_org": original_sha1, "checksum_calc": calculated_sha1}
+            return sha1res
     except OSError as identifier:
         raise OSError('SHA1check failure, details: "{id}"'.format(id=identifier))
 
@@ -280,9 +284,13 @@ def checksum_file(file_info):
     sha1 = getSHA1(file_item, file_info['filetype'])
     sha1res = sha1check(file_info['path'], file_info['machine_name'], sha1)
 
-    if (md5res or sha1res):
+    if (md5res['verdict'] or sha1res['verdict']): #TODO: Fail on both or allow one checksum to error?
         return True
     else:
+        if not md5res['verdict']:
+            log_error("MD5 verification failed!", file_info['filetype'], file_info['machine_name'], md5res['checksum_org'], md5res['checksum_calc'])
+        if not sha1res['verdict']:
+            log_error("SHA1 verification failed!", file_info['filetype'], file_info['machine_name'], sha1res['checksum_org'], sha1res['checksum_calc'])
         return False
 
 def download(path, machine_name, filetype):
@@ -297,7 +305,7 @@ def download(path, machine_name, filetype):
     # Download the file from `url` and save it locally under `file_name`:
     #chunk_read(response, report_hook=chunk_report),
     try:
-        print("Starting download for: " + file_item['human_name'] + "with filetype: " + filetype + " and size:" + human_size)
+        print("Starting download for: " + file_item['human_name'] + "." + filetype + " with size: " + human_size)
         print("Downloading file: " + machine_name + " to path: " + path)
         print("URL for download: " + url)
         with urllib.request.urlopen(url) as response, open(file_name_to_save, 'wb') as out_file:
@@ -323,9 +331,9 @@ def loop_through_list_until_empty(name_of_list, filetype, max_retires=3):
                         name_of_list.remove(machine_name)
                         i = 0
                     else:
-                        colorize("FAILED to download: ".format(machine_name), "red")
+                        colorize("FAILED to download: " + machine_name + " with filetype " + filetype, "red")
                 else:
-                    colorize("FAILED to download: ".format(machine_name), "red")
+                    colorize("FAILED to download: " + machine_name + " with filetype " + filetype, "red")
                 print("There are {} files left to download".format(len(name_of_list)))
             if len(name_of_list) == 0:
                 break
@@ -364,11 +372,11 @@ def handle_args(args):
         print("Verbose output enabled")
         VERBOSE = True
 
-def log_error(text, filepath, filename, org_checksum, calculated_checksum):
+def log_error(text, filetype, filename, org_checksum, calculated_checksum):
     now = datetime.now()
     logline = str(now) + " " + \
             " message:" + text + " " + \
-            " filepath:" + filepath + " " + \
+            " filetype:" + filetype + " " + \
             " filename:" + filename + " " + \
             " org_checksum: " + org_checksum + " " + \
             " calculated_checksum: " + calculated_checksum
