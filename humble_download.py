@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
+from datetime import datetime
+from re import VERBOSE
 import requests
 import json
 import time
@@ -24,6 +26,7 @@ filename_match_list = []
 filename_no_match_list = []
 md5_match_list = []
 md5_no_match_list = []
+VERBOSE = False
 
 header = "\
   _    _                 _     _      ____                  _ _      \n\
@@ -185,6 +188,7 @@ def md5check(filepath, filename, org_checksum):
             return True
         else:
             colorize("MD5 verification failed!.", "red")
+            log_error("MD5 verification failed!", filepath, filename, original_md5, calculated_md5)
             return False
     except OSError as identifier:
         raise OSError('MD5check failure, details: "{id}"'.format(id=identifier))
@@ -201,6 +205,7 @@ def sha1check(filepath, filename, org_checksum):
             return True
         else:
             colorize("SHA1 verification failed!.", "red")
+            log_error("SHA1 verification failed!", filepath, filename, original_sha1, calculated_sha1)
             return False
     except OSError as identifier:
         raise OSError('SHA1check failure, details: "{id}"'.format(id=identifier))
@@ -268,13 +273,12 @@ def checksum_file(file_info):
     md5res = md5check(file_info['path'], file_info['machine_name'], md5)
 
     sha1 = getSHA1(file_item, file_info['filetype'])
-    sha1res = sha1check(file_info['path'], file_info['machine_name'], md5)
+    sha1res = sha1check(file_info['path'], file_info['machine_name'], sha1)
 
     if (md5res or sha1res):
         return True
     else:
         return False
-
 
 def download(path, machine_name, filetype):
     #TODO: How to do this one with many threads?
@@ -351,6 +355,18 @@ def assure_path_exists(path):
 def handle_args(args):
     if args.verbose:
         print("Verbose output enabled")
+        VERBOSE = True
+
+def log_error(text, filepath, filename, org_checksum, calculated_checksum):
+    now = datetime.now()
+    logline = str(now) + " " + \
+            " message:" + text + " " + \
+            " filepath:" + filepath + " " + \
+            " filename:" + filename + " " + \
+            " org_checksum: " + org_checksum + " " + \
+            " calculated_checksum: " + calculated_checksum
+    with open('errors.log', "a") as errorlog:
+        errorlog.writelines(logline + "\n")
 
 #----------------------------------------------
 # Functions end here
