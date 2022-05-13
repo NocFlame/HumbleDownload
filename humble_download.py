@@ -224,6 +224,11 @@ def getURL(item, name):
         if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
             return dl_str['web']
 
+def getHumanSize(item, name):
+    for dl_str in item['download_struct']:
+        if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
+            return dl_str['human_size']
+
 def getMD5(item, name):
     for dl_str in item['download_struct']:
         if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
@@ -285,12 +290,14 @@ def download(path, machine_name, filetype):
     #type is MOBI, EPUB, PDF, Download (last is for platform: video)
     file_item = getItemObject(machine_name)
     url = getURL(file_item, filetype)
+    human_size = getHumanSize(file_item, filetype)
 
     #file_name_to_save = machine_name
     file_name_to_save = os.path.join(path, machine_name)
     # Download the file from `url` and save it locally under `file_name`:
     #chunk_read(response, report_hook=chunk_report),
     try:
+        print("Starting download for: " + file_item['human_name'] + "with filetype: " + filetype + " and size:" + human_size)
         print("Downloading file: " + machine_name + " to path: " + path)
         print("URL for download: " + url)
         with urllib.request.urlopen(url) as response, open(file_name_to_save, 'wb') as out_file:
