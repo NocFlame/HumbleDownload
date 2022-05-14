@@ -288,9 +288,19 @@ def checksum_file(file_info):
         return True
     else:
         if not md5res['verdict']:
-            log_error("MD5 verification failed!", file_info['filetype'], file_info['machine_name'], md5res['checksum_org'], md5res['checksum_calc'])
+            error_text = "MD5 verification failed!" + " " + \
+            " filetype:" + file_info['filetype'] + " " + \
+            " filename:" + file_info['machine_name'] + " " + \
+            " org_checksum: " + md5res['checksum_org'] + " " + \
+            " calculated_checksum: " + md5res['checksum_calc']
+            log_error(error_text )
         if not sha1res['verdict']:
-            log_error("SHA1 verification failed!", file_info['filetype'], file_info['machine_name'], sha1res['checksum_org'], sha1res['checksum_calc'])
+            error_text = "SHA1 verification failed!" + " " + \
+            " filetype:" + file_info['filetype'] + " " + \
+            " filename:" + file_info['machine_name'] + " " + \
+            " org_checksum: " + sha1res['checksum_org'] + " " + \
+            " calculated_checksum: " + sha1res['checksum_calc']
+            log_error(error_text )
         return False
 
 def download(path, machine_name, filetype):
@@ -372,14 +382,10 @@ def handle_args(args):
         print("Verbose output enabled")
         VERBOSE = True
 
-def log_error(text, filetype, filename, org_checksum, calculated_checksum):
+def log_error(text):
     now = datetime.now()
     logline = str(now) + " " + \
-            " message:" + text + " " + \
-            " filetype:" + filetype + " " + \
-            " filename:" + filename + " " + \
-            " org_checksum: " + org_checksum + " " + \
-            " calculated_checksum: " + calculated_checksum
+            " message:" + text
     with open('errors.log', "a") as errorlog:
         errorlog.writelines(logline + "\n")
 
