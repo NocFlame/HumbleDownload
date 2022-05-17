@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import argparse
 from datetime import datetime
-from re import VERBOSE
 import requests
 import json
 import time
@@ -326,6 +325,8 @@ def download(path, machine_name, filetype):
     except OSError as identifier:
         print("download failure?: ")
         print(identifier)
+        error_text = "Failure to download file! " + "filetype:" + filetype + " filename: " + machine_name + " path: " + path + " identifier" + str(identifier)
+        log_error(error_text)
         return False
 
 def loop_through_list_until_empty(name_of_list, filetype, max_retires=3):
