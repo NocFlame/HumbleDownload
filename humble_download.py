@@ -3,19 +3,18 @@
 import argparse
 from datetime import datetime
 import requests
+import sys
 import json
-import time
 import os
 from pathlib import Path
 from os import listdir
 from os.path import isfile, join
 import hashlib
-import urllib.request
 import shutil
 #from colorama import init, Fore, Back, Style #https://github.com/tartley/colorama
 from termcolor import colored #https://pypi.org/project/termcolor/
 
-VERSION = "version 0.1\n"
+VERSION = "version 0.2\n"
 COOKIE = "" #Static value from file
 URL_ORDER = "https://www.humblebundle.com:443/api/v1/order/"
 URL_LIBRARY = "https://www.humblebundle.com:443/home/library"
@@ -25,7 +24,7 @@ filename_match_list = []
 filename_no_match_list = []
 md5_match_list = []
 md5_no_match_list = []
-VERBOSE = False
+verbose = True
 
 header = "\
   _    _                 _     _      ____                  _ _      \n\
@@ -36,8 +35,6 @@ header = "\
  |_|  |_|\__,_|_| |_| |_|_.__/|_|\___|____/ \__,_|_| |_|\__,_|_|\___|\n"
 
 def colorize(string, color):
-    #TODO: fix color output
-    #print(Fore.RED + string + Style.RESET_ALL) #Colorama
     print(colored(string, color)) #Termcolor
 
 def check_cookie():
@@ -120,30 +117,32 @@ def parse_json(json):
             #print(item['human_name'])
             single_item['human_name'] = item['human_name']
             try:
-                if item['downloads'][0]['platform'] in ('video', 'ebook'): #Values could be: video, ebook
-                        #print(item['machine_name'])
-                        single_item['machine_name'] = item['machine_name']
-                        #print(item['downloads'][0]['platform'])
-                        single_item['platform'] = item['downloads'][0]['platform']
-                        #print("**********")
-                        for dl_str in item['downloads'][0]['download_struct']:
-                            if dl_str['name'] in ('PDF', 'EPUB', 'Download'):
-                                    tmp_dl_info = {}
-                                    #print(dl_str['name'])
-                                    tmp_dl_info['name'] = dl_str['name']
-                                    #print(dl_str['url']['web'])
-                                    tmp_dl_info['web'] = dl_str['url']['web']
-                                    #print(dl_str['human_size'])
-                                    tmp_dl_info['human_size'] = dl_str['human_size']
-                                    #print(dl_str['md5'])
-                                    tmp_dl_info['md5'] = dl_str['md5']
-                                    try:
-                                        #print(dl_str['sha1'])
-                                        tmp_dl_info['sha1'] = dl_str['sha1']
-                                    except (KeyError):#missing sha1
-                                        pass
-                                    single_item['download_struct'].append(tmp_dl_info)
-                                    #print("----------")
+                raw_platforms.append(item['downloads'][0]['platform'])
+                #colorize("Plattform detected: " + item['downloads'][0]['platform'], "yellow")    
+                #if item['downloads'][0]['platform'] in ('video', 'ebook', 'windows'): #Values could be: video, ebook
+                #print(item['machine_name'])
+                single_item['machine_name'] = item['machine_name']
+                #print(item['downloads'][0]['platform'])
+                single_item['platform'] = item['downloads'][0]['platform']
+                #print("**********")
+                for dl_str in item['downloads'][0]['download_struct']:
+                    #if dl_str['name'] in ('PDF', 'EPUB', 'Download'):
+                    tmp_dl_info = {}
+                    #print(dl_str['name'])
+                    tmp_dl_info['name'] = dl_str['name']
+                    #print(dl_str['url']['web'])
+                    tmp_dl_info['web'] = dl_str['url']['web']
+                    #print(dl_str['human_size'])
+                    tmp_dl_info['human_size'] = dl_str['human_size']
+                    #print(dl_str['md5'])
+                    tmp_dl_info['md5'] = dl_str['md5']
+                    try:
+                        #print(dl_str['sha1'])
+                        tmp_dl_info['sha1'] = dl_str['sha1']
+                    except (KeyError):#missing sha1
+                        pass
+                    single_item['download_struct'].append(tmp_dl_info)
+                    #print("----------")
                 #bundle_data.setdefault(single_item['human_name'], single_item)
                 bundle_data['items'].append(single_item)
                 counter = counter + 1
@@ -183,14 +182,17 @@ def md5check(filepath, filename, org_checksum):
         calculated_md5 = calculate_md5(file_name)
         # Finally compare original MD5 with freshly calculated
         if original_md5 == calculated_md5:
-            if VERBOSE:
+            if verbose:
                 print("MD5 verified.")
             md5res = {"verdict": True, "checksum_org": original_md5, "checksum_calc": calculated_md5}
             return md5res
         else:
-            colorize("MD5 verification failed!", "red")
-            md5res = {"verdict": False, "checksum_org": original_md5, "checksum_calc": calculated_md5}
-            return md5res
+            if original_md5 == "n/a":
+                colorize("MD5 verification failed due to missing SHA1 from source", "red")
+            else:
+                colorize("MD5 verification failed!", "red")
+                md5res = {"verdict": False, "checksum_org": original_md5, "checksum_calc": calculated_md5}
+                return md5res
     except OSError as identifier:
         raise OSError('MD5check failure, details: "{id}"'.format(id=identifier))
 
@@ -202,12 +204,15 @@ def sha1check(filepath, filename, org_checksum):
         calculated_sha1 = calculate_sha1(file_name)
         # Finally compare original SHA1 with freshly calculated
         if original_sha1 == calculated_sha1:
-            if VERBOSE:
+            if verbose:
                 print("SHA1 verified.")
             sha1res = {"verdict": True, "checksum_org": original_sha1, "checksum_calc": calculated_sha1}
             return sha1res
         else:
-            colorize("SHA1 verification failed!", "red")
+            if original_sha1 == "n/a":
+                colorize("SHA1 verification failed due to missing SHA1 from source", "red")
+            else:
+                colorize("SHA1 verification failed!", "red")
             sha1res = {"verdict": False, "checksum_org": original_sha1, "checksum_calc": calculated_sha1}
             return sha1res
     except OSError as identifier:
@@ -222,28 +227,74 @@ def getItemObject(machine_name):
             except KeyError:
                 pass
 
-def getURL(item, name):
+def getURL(item, filetype):
     for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
-            return dl_str['web']
+        if dl_str['name'].lower() == filetype:
+            if "FILE_NAME" in dl_str['web']:
+                return "n/a"
+            else:
+                return dl_str['web']
+    #So filetype was not in the normal list? Loop again and check download url for best match
+    for dl_str in item['download_struct']:
+        url = dl_str['web']
+        url_filetype = getFileTypeFromUrl(url)
+        if url_filetype == filetype:
+            if "FILE_NAME" in url:
+                return "n/a"
+            else:
+                return url
+    colorize("Could not get URL from {} with {} extension".format(item['human_name'], filetype), "red")
+    log_error("Could not get URL from {} with {} extension".format(item['human_name'], filetype), "red")
 
-def getHumanSize(item, name):
+def getHumanSize(item, filetype):
     for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
+        if dl_str['name'].lower() == filetype.lower():
             return dl_str['human_size']
-
-def getMD5(item, name):
     for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
-            return dl_str['md5']
+        if dl_str['name'].lower() in weirdNamesExceptionList():
+            return dl_str['human_size']
+    return '0'
 
-def getSHA1(item, name):
+def getMD5(item, filetype):
     for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == name.lower() or dl_str['name'].lower() == "download":
+        if dl_str['name'].lower() == filetype.lower():
+            try:
+                return dl_str['md5']
+            except KeyError as identifier:
+                return "n/a"
+    for dl_str in item['download_struct']:
+        if dl_str['name'].lower() in weirdNamesExceptionList():
+            try:
+                return dl_str['md5']
+            except KeyError as identifier:
+                return "n/a"
+    log_error("New weird name detected: " + dl_str['name'])
+    try:
+        return dl_str['md5']
+    except KeyError as identifier:
+        return "n/a"
+
+def getSHA1(item, filetype):
+    for dl_str in item['download_struct']:
+        if dl_str['name'].lower() == filetype.lower() or dl_str['name'].lower() in weirdNamesExceptionList():
             try:
                 return dl_str['sha1']
             except KeyError as identifier:
                 return "n/a"
+    for dl_str in item['download_struct']:
+        if dl_str['name'].lower() in weirdNamesExceptionList():
+            try:
+                return dl_str['sha1']
+            except KeyError as identifier:
+                return "n/a"
+    log_error("New weird name detected: " + dl_str['name'])
+    try:
+        return dl_str['sha1']
+    except KeyError as identifier:
+        return "n/a"
+
+def weirdNamesExceptionList():
+    return ['download', 'supplement', 'mp3', 'companion file', 'installer', '.zip']
 
 def chunk_report(bytes_so_far, chunk_size, total_size):
     import sys
@@ -274,93 +325,180 @@ def chunk_read(response, chunk_size=8192, report_hook=None):
 
 def checksum_file(file_info):
     #structure of file_info -> {'path':path, 'machine_name':machine_name, 'filetype':filetype}
-    #TODO check which checksums that should be done
-    file_item = getItemObject(file_info['machine_name'])
+    mname = file_info['machine_name']
+    filetype = file_info['filetype'].lower()
+    file_item = getItemObject(mname)
 
-    md5 = getMD5(file_item, file_info['filetype'])
-    md5res = md5check(file_info['path'], file_info['machine_name'], md5)
+    md5 = getMD5(file_item, filetype)
+    md5res = md5check(file_info['path'], mname, md5)
 
-    sha1 = getSHA1(file_item, file_info['filetype'])
-    sha1res = sha1check(file_info['path'], file_info['machine_name'], sha1)
+    sha1 = getSHA1(file_item, filetype)
+    sha1res = sha1check(file_info['path'], mname, sha1)
 
-    if (md5res['verdict'] or sha1res['verdict']): #TODO: Fail on both or allow one checksum to error?
+    if (md5res['verdict'] and sha1res['verdict']):
         return True
+    elif (md5res['verdict'] or sha1res['verdict']):
+            #log faulty one but still return true
+            if not md5res['verdict']:
+                error_text = "MD5 verification failed!" + " " + \
+                " filetype:" + filetype + " " + \
+                " filename:" + mname + " " + \
+                " org_checksum: " + md5res['checksum_org'] + " " + \
+                " calculated_checksum: " + md5res['checksum_calc']
+                log_error(error_text )
+            if not sha1res['verdict']:
+                error_text = "SHA1 verification failed!" + " " + \
+                " filetype:" + filetype + " " + \
+                " filename:" + mname + " " + \
+                " org_checksum: " + sha1res['checksum_org'] + " " + \
+                " calculated_checksum: " + sha1res['checksum_calc']
+                log_error(error_text )
+            return True
     else:
-        if not md5res['verdict']:
-            error_text = "MD5 verification failed!" + " " + \
-            " filetype:" + file_info['filetype'] + " " + \
-            " filename:" + file_info['machine_name'] + " " + \
-            " org_checksum: " + md5res['checksum_org'] + " " + \
-            " calculated_checksum: " + md5res['checksum_calc']
-            log_error(error_text )
-        if not sha1res['verdict']:
-            error_text = "SHA1 verification failed!" + " " + \
-            " filetype:" + file_info['filetype'] + " " + \
-            " filename:" + file_info['machine_name'] + " " + \
-            " org_checksum: " + sha1res['checksum_org'] + " " + \
-            " calculated_checksum: " + sha1res['checksum_calc']
-            log_error(error_text )
+        #Both faulty and logged return false
+        error_text = "MD5 verification failed!" + " " + \
+        " filetype:" + filetype + " " + \
+        " filename:" + mname + " " + \
+        " org_checksum: " + md5res['checksum_org'] + " " + \
+        " calculated_checksum: " + md5res['checksum_calc']
+        log_error(error_text )
+        error_text = "SHA1 verification failed!" + " " + \
+        " filetype:" + filetype + " " + \
+        " filename:" + mname + " " + \
+        " org_checksum: " + sha1res['checksum_org'] + " " + \
+        " calculated_checksum: " + sha1res['checksum_calc']
+        log_error(error_text )
         return False
 
-def download(path, machine_name, filetype):
+def getFileTypeFromUrl(url):
+    if "FILE_NAME" in url:
+        return ""
+    else:
+        split_url = url.split('?')
+        url_file_type = split_url[0][split_url[0].find('.',-6)+1:].lower() #+1 is to skip the full stop
+        return url_file_type
+
+def getSubfolderFromPlatform(file_info):
+    platform = file_info['platform'].lower()
+    filetype = file_info['filetype'].lower()
+    if platform == "ebook":
+        return filetype
+    else:
+        return platform
+
+def progress_download(url, filename):
+    with open(filename, 'wb') as f:
+        response = requests.get(url, stream=True)
+        total = response.headers.get('content-length')
+
+        if total is None:
+            f.write(response.content)
+        else:
+            downloaded = 0
+            total = int(total)
+            for data in response.iter_content(chunk_size=max(int(total/1000), 1024*1024)):
+                downloaded += len(data)
+                f.write(data)
+                done = int(50*downloaded/total)
+                sys.stdout.write('\r[{}{}]'.format('█' * done, '.' * (50-done)))
+                sys.stdout.flush()
+    sys.stdout.write('\n')
+
+def download(machine_name, filetype):
     #TODO: How to do this one with many threads?
-    #type is MOBI, EPUB, PDF, Download (last is for platform: video)
+    path = DOWNLOAD_TEMP_PATH
     file_item = getItemObject(machine_name)
     url = getURL(file_item, filetype)
-    human_size = getHumanSize(file_item, filetype)
-
-    #file_name_to_save = machine_name
-    file_name_to_save = os.path.join(path, machine_name)
-    # Download the file from `url` and save it locally under `file_name`:
-    #chunk_read(response, report_hook=chunk_report),
-    try:
-        print("Starting download for: " + file_item['human_name'] + "." + filetype + " with size: " + human_size)
-        print("Downloading file: " + machine_name + " to path: " + path)
-        print("URL for download: " + url)
-        with urllib.request.urlopen(url) as response, open(file_name_to_save, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
-            out_file.close()
-            file_info = {'path':path, 'machine_name':machine_name, 'filetype':filetype}
+    if url != "n/a":
+        url_file_type = getFileTypeFromUrl(url)
+        human_size = getHumanSize(file_item, url_file_type)
+        temp_filename = os.path.join(path, machine_name)
+        try:
+            print("Starting download for: " + file_item['human_name'] + "." + url_file_type + " with size: " + human_size)
+            print("Downloading file: " + machine_name + " to path: " + path)
+            print("URL for download: " + url)
+            # with urllib.request.urlopen(url) as response, open(temp_filename, 'wb') as out_file:
+            #     shutil.copyfileobj(response, out_file)
+            #     out_file.close()
+            #     file_info = {'path':path, 'machine_name':machine_name, 'filetype':url_file_type, 'platform': file_item['platform']}
+            #     return file_info
+            progress_download(url, temp_filename)
+            file_info = {'path':path, 'machine_name':machine_name, 'filetype':url_file_type, 'platform': file_item['platform']}
             return file_info
-    except OSError as identifier:
-        print("download failure?: ")
-        print(identifier)
-        error_text = "Failure to download file! " + "filetype:" + filetype + " filename: " + machine_name + " path: " + path + " identifier" + str(identifier)
-        log_error(error_text)
+        except OSError as identifier:
+            print("download failure?: ")
+            print(identifier)
+            error_text = "Failure to download file! " + "filetype:" + url_file_type + " filename: " + machine_name + " path: " + path + " identifier" + str(identifier)
+            log_error(error_text)
+            return False
+    else:
+        return False
+    
+def checkFileAgainstFilter(filename, allowed_filetypes):
+    filetype = filename[filename.find('.',-6)+1:]
+    if filetype in allowed_filetypes or "*" in allowed_filetypes:
+        return True
+    else:
+        print("Skipping downloading file {} since its not in the allowed filetypes aka its filtered out!".format(filename))
         return False
 
-def loop_through_list_until_empty(name_of_list, filetype, max_retires=3):
+def handle_existing_tempfiles(mname, filetype):
+    #This method is not yet used
+    path = DOWNLOAD_TEMP_PATH
+    file_item = getItemObject(mname)
+    url = getURL(file_item, filetype)
+    temp_filename = os.path.join(path, mname)
+    if os.path.exists(temp_filename):
+        file_info = {'path':path, 'machine_name':mname, 'filetype':filetype, 'platform': file_item['platform']}
+        return file_info
+    else:
+        return False
+
+def loop_through_list_until_empty(list_of_missing_files, allowed_filetypes, max_retires=3):
     for i in range(max_retires):
         try:
-            for machine_name in name_of_list:
-                print("Trying to download file: " + machine_name)
-                file_info = download(DOWNLOAD_TEMP_PATH, machine_name, filetype)
-                if file_info:
-                    res = checksum_file(file_info)
-                    if res:
-                        shutil.move(join(DOWNLOAD_TEMP_PATH, machine_name), join(join(PATH, filetype), machine_name + "." + filetype))
-                        name_of_list.remove(machine_name)
-                        i = 0
+            for filename in list_of_missing_files:
+                if checkFileAgainstFilter(filename, allowed_filetypes):
+                    #Debug
+                    if filename == DEBUGTEXT:
+                        print("Placeholder for debugprint")
+                    machine_name = filename[:filename.find('.',-6)]
+                    filetype = filename[filename.find('.',-6)+1:]
+                    #handle_existing_tempfiles(machine_name, filetype)
+                    print("Trying to download file: " + filename)
+                    file_info = download(machine_name, filetype)
+                    if file_info:
+                        res = checksum_file(file_info)
+                        if res:
+                            move_file(file_info)
+                            list_of_missing_files.remove(filename)
+                            i = 0
+                        else:
+                            colorize("FAILED on checksums: " + filename + " with filetype " + filetype, "red")
+                            if force_move_file_that_failed_checksum:
+                                move_file(file_info)
                     else:
-                        colorize("FAILED to download: " + machine_name + " with filetype " + filetype, "red")
-                else:
-                    colorize("FAILED to download: " + machine_name + " with filetype " + filetype, "red")
-                print("There are {} files left to download".format(len(name_of_list)))
-            if len(name_of_list) == 0:
-                break
+                        colorize("FAILED to download: " + filename + " with filetype " + filetype, "red")
+                    print("There are {} files left to download".format(len(list_of_missing_files)))
         except OSError as identifier:
             print("loop_through_list_until_empty: ")
             print(identifier)
             pass
 
-#When returning, adding +1 for the dot (fullstop) '.'
-def getfileformatlength(x):
-    return {
-        'epub': 5,
-        'pdf': 4,
-        'mobi': 5,
-        'zip': 4
-    }.get(x, 0)    # 0 is default if x not found
+def move_file(file_info):
+    platform = file_info['platform'].lower()
+    filetype = file_info['filetype'].lower()
+    filename = file_info['machine_name'] + "." + filetype
+    subfolder = getSubfolderFromPlatform(file_info)
+    tempfile = join(DOWNLOAD_TEMP_PATH, file_info['machine_name'])
+    if platform == "ebook":
+        path = join(PATH, "ebook/" + filetype)
+    else:
+        path = join(PATH, subfolder)
+    finalpath = join(path, filename)
+    assure_path_exists(path)
+    colorize("moving " + tempfile + " to its final resting place: " + finalpath, "blue")
+    shutil.move(tempfile, finalpath)
 
 def handle_MD5check(PATH, mname, name, md5):
     global md5_match_list, md5_no_match_list
@@ -381,7 +519,7 @@ def assure_path_exists(path):
 def handle_args(args):
     if args.verbose:
         print("Verbose output enabled")
-        VERBOSE = True
+        verbose = True
 
 def log_error(text):
     now = datetime.now()
@@ -389,6 +527,32 @@ def log_error(text):
             " message:" + text
     with open('errors.log', "a") as errorlog:
         errorlog.writelines(logline + "\n")
+
+def getExistingFilesInFolder(platform):
+    head = join(PATH, platform + "/")
+    if platform != "ebook":
+        filelist = [f for f in listdir(head) if isfile(join(head, f))]
+        return filelist
+    else:
+        filelist = []
+        dirlist = []
+        dirlist.append(head)
+        while len(dirlist) > 0:
+            for (dirpath, dirnames, filenames) in os.walk(dirlist.pop()):
+                dirlist.extend(dirnames)
+                #filelist.extend(map(lambda n: os.path.join(*n), zip([dirpath] * len(filenames), filenames)))
+                filelist.extend(map(lambda n: os.path.join(n), filenames))
+        return filelist
+
+def getSortedUniques(listA):
+    if len(listA) > 0:
+        list_set = set(listA)
+        unique_list = (list(list_set))
+        unique_list.sort()
+        return unique_list
+    else:
+        return []
+
 
 #----------------------------------------------
 # Functions end here
@@ -426,7 +590,8 @@ parser = argparse.ArgumentParser(description='HumbleBundle Downloader')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-q','--quiet', help='Runs quietly and just report when its done', action="store_true", required=False)
 group.add_argument('-v','--verbose', help='verbose output', action="store_true", required=False)
-parser.add_argument('-n','--no-calculate_md5', help='Skips MD5 checks for local files', action="store_true", required=False)
+parser.add_argument('-n','--no-checksum-on-local-files', help='Skips checksum checks for local files', action="store_true", required=False) # This should be paired with the 'verify_checksum_on_existing_files'
+parser.add_argument('-i','--ignore-downloaded-checksum', help='Skips checksum checks for downloaded files', action="store_true", required=False) # This should be paired with the 'force_move_file_that_failed_checksum'
 parser.add_argument('-d', '--dry-run', help='Does a dry run that skips actual download', action="store_true", required=False)
 parser.add_argument('-B', '--Books', help='Download only books', action="store_true", required=False) #All book formats ie using e,p,m switches
 parser.add_argument('-e', '--epub', help='Download only epub books', action="store_true", required=False) #EPUB
@@ -436,79 +601,116 @@ parser.add_argument('-o', '--other', help='Download only zip files for video/oth
 args = parser.parse_args()
 
 handle_args(args)
-
-print("Fetching your keys...")
-library_res = get_library()
-keys = extract_keys_from_library(library_res)
-nbr_keys = len(keys)
 raw_json = []
+offline = False
+raw_platforms = []
 
-if not keys:
-    #raw_json.append(api_call(keys[0]))
-    colorize("No keys found, is the correct cookie applied?", 'red')
-    exit(1)
-if not args.quiet:
-    colorize("Got {0} keys, getting data for each one".format(nbr_keys), 'green')
+#check for offline file
+if isfile('data.json'):
+    colorize("data.json file found, will use that instead of online. Rename or Remove file to fetch data from online source.", "yellow")
+    with open('data.json') as file:
+        raw_json = json.load(file)
+        offline = True
 
-for itr, key in enumerate(keys):
-    #api_call(key)
-    raw_json.append(api_call(key))
-    print(key + ": {0}/{1}".format(itr+1, nbr_keys))
-    data = parse_json(raw_json)
+if not offline:
+    print("Fetching your keys...")
+    library_res = get_library()
+    keys = extract_keys_from_library(library_res)
+    nbr_keys = len(keys)
 
-#DUBUG - Write raw_json data to file
-#json.dump(raw_json, open('data.json','w'))
+    if not keys:
+        #raw_json.append(api_call(keys[0]))
+        colorize("No keys found, is the correct cookie applied?", 'red')
+        exit(1)
+    if not args.quiet:
+        colorize("Got {0} keys, getting data for each one".format(nbr_keys), 'green')
+
+    for itr, key in enumerate(keys):
+        #api_call(key)
+        raw_json.append(api_call(key))
+        print(key + ": {0}/{1}".format(itr+1, nbr_keys))
+        data = parse_json(raw_json)
+
+data = parse_json(raw_json)
+
+unique_platforms = list(set(raw_platforms))
+unique_platforms.sort()
+colorize("Plattform detected: ", "yellow")
+for platform in unique_platforms:
+    colorize(str(platform), "yellow")
+
+if verbose and not offline:
+    json.dump(raw_json, open('data.json','w'))
 
 
-def masterhandler(hb_data, PATH, fileformat):
-    head, tail = os.path.split(PATH)
+def masterhandler(hb_data, platform, allowed_filetypes):
+    localFilenamelist = []
+    filename_match_list = set()
+    filename_no_match_list = set()
+    md5_match_list = []
+    md5_no_match_list = []
+    head, tail = os.path.split(join(PATH, platform + '/'))
     print("head: {0} & tail: {1}".format(head, tail))
-    if (not os.path.isdir(PATH) and not tail):
-        assure_path_exists(PATH)
-    #exit(1)
-    global localFilenamelist, md5_match_list, md5_no_match_list, filename_match_list, filename_no_match_list
-    #TODO: HAVE TO BE GENERIC from the dot (full stop) of filename
-    file_ending_trimming = getfileformatlength(fileformat.lower())
-    localFilenamelist = [f[:-file_ending_trimming] for f in listdir(PATH) if isfile(join(PATH, f))] #[:-5] is to cut out .epub on filename
+    if (not os.path.isdir(head) and not tail):
+        assure_path_exists(head)
+    
+    localFilenamelist = getExistingFilesInFolder(platform)
+    
     for bundle in data:
-        for items in bundle['items']:
-            for dl_str in items['download_struct']:
-                if dl_str['name'].lower() == fileformat.lower() or (dl_str['name'].lower() == "download" and fileformat.lower() == "zip"):
-                    mname = items['machine_name']
-                    md5 = dl_str['md5']
-                    if mname in localFilenamelist:
-                        filename_match_list.append(mname)
-                        #print("Found filename match on: " + mname)
-                        handle_MD5check(PATH, mname, mname + "." + fileformat.lower(), md5)
-                    else:
-                        filename_no_match_list.append(mname)
-                        #print("Failed to find: " + mname)
-                        #Download file
-
-    print("Found {} matches on filename".format(len(filename_match_list)))
-    print("Found {} missing matches on filename".format(len(filename_no_match_list)))
-    print("Found {} filenames not in remote list of files".format(len(localFilenamelist) - (len(filename_match_list) + len(filename_no_match_list))))
+        for item in bundle['items']:
+            try:
+                if item['platform'] == platform:
+                    for dl_str in item['download_struct']:
+                        #if dl_str['name'].lower() in allowed_filetypes or (dl_str['name'].lower() == "download") or ("*" in allowed_filetypes):
+                            url_file_type = getFileTypeFromUrl(dl_str['web'])
+                            mname = item['machine_name']
+                            md5 = dl_str['md5']
+                            filename = mname + "." + url_file_type
+                            #Debug
+                            if mname in DEBUGTEXT:
+                                print("placeholder for debugprint")
+                            if url_file_type == "": #handle weird behaviour when no download link is available in getFileTypeFromUrl
+                                colorize("Could not handle weird file {}".format(mname), "red")
+                                log_error("Could not handle weird file {}".format(mname))
+                            elif filename in localFilenamelist:
+                                filename_match_list.add(mname)
+                                #print("Found filename match on: " + mname)
+                                if verify_checksum_on_existing_files:
+                                    if platform == "ebook":
+                                            handle_MD5check(join(head, url_file_type), mname, mname + "." + url_file_type.lower(), md5)
+                                    else:
+                                        handle_MD5check(head, mname, mname + "." + url_file_type.lower(), md5)
+                                #handle_MD5check(head, mname, mname , md5)
+                            else:
+                                filename_no_match_list.add(filename)
+                                #print("Failed to find: " + mname)
+                                #Download file
+            except KeyError:
+                pass
+    print("Currently have {} local files in folder {}".format(len((localFilenamelist)), platform))
+    print("Found {} matches on filename".format(len((filename_match_list))))
+    print("Found {} unique missing matches on filename".format(len((filename_no_match_list))))
+    print("Found {} filenames not in remote list of files".format(len((localFilenamelist)) - (len((filename_match_list)) + len((filename_no_match_list)))))
     print("Found {} true hashes on md5".format(len(md5_match_list)))
     print("Found {} failed hashes on md5".format(len(md5_no_match_list)))
 
-    #Debug
-    #for item in filename_no_match_list:
-    #    print(item)
+    if len(filename_no_match_list) > 0:
+        loop_through_list_until_empty(getSortedUniques(filename_no_match_list), allowed_filetypes)
+    if len(md5_no_match_list) > 0:
+        loop_through_list_until_empty(getSortedUniques(md5_no_match_list), allowed_filetypes)
 
-    loop_through_list_until_empty(filename_no_match_list, fileformat.lower())
-    loop_through_list_until_empty(md5_no_match_list, fileformat.lower())
 
-    localFilenamelist = []
-    filename_match_list = []
-    filename_no_match_list = []
-    md5_match_list = []
-    md5_no_match_list = []
+    print("All files is done for platform:", platform)
 
-    print("All files is done for type: ", fileformat.lower())
+#Platforms
+#windows, ebook, other, android, mac, video, linux, audio
 
-masterhandler(data, join(PATH, 'epub/'), 'epub') #EPUB
-masterhandler(data, join(PATH, 'pdf/'), 'pdf') #PDF
-masterhandler(data, join(PATH, 'mobi/'), 'mobi') #Mobi
-masterhandler(data, join(PATH, 'zip/'), 'zip') #Video/Other?
+allowed_filetypes = ["*"] #What file types are allowed ['pdf', 'epub', '*'] * = allow everything
+verify_checksum_on_existing_files = True
+force_move_file_that_failed_checksum = False
+DEBUGTEXT = "" #Input a title like 'advanced_go.pdf' for debugging purposes
+
+for platform in unique_platforms:
+    masterhandler(data, platform, allowed_filetypes)
 
 print("All done!")
