@@ -615,8 +615,10 @@ if isfile('data.json'):
 if not offline:
     print("Fetching your keys...")
     library_res = get_library()
-    keys = extract_keys_from_library(library_res)
-    nbr_keys = len(keys)
+    keys = False
+    if library_res.url != "https://www.humblebundle.com/login?goto=%2Fhome%2Flibrary&qs=":
+        keys = extract_keys_from_library(library_res)
+        nbr_keys = len(keys)
 
     if not keys:
         #raw_json.append(api_call(keys[0]))
