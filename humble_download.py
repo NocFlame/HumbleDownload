@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import argparse
 from datetime import datetime
+from typing import Dict, List
+
 import requests
 import sys
 import json
@@ -251,49 +253,71 @@ def getHumanSize(item, filetype):
         if dl_str['name'].lower() == filetype.lower():
             return dl_str['human_size']
     for dl_str in item['download_struct']:
-        if dl_str['name'].lower() in weirdNamesExceptionList():
+        if dl_str['name'].lower() in weird_names_exception_list():
             return dl_str['human_size']
     return '0'
 
-def getMD5(item, filetype):
-    for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == filetype.lower():
-            try:
-                return dl_str['md5']
-            except KeyError as identifier:
-                return "n/a"
-    for dl_str in item['download_struct']:
-        if dl_str['name'].lower() in weirdNamesExceptionList():
-            try:
-                return dl_str['md5']
-            except KeyError as identifier:
-                return "n/a"
-    log_error("New weird name detected: " + dl_str['name'])
-    try:
-        return dl_str['md5']
-    except KeyError as identifier:
-        return "n/a"
+def get_md5(item: Dict[str, List[Dict[str, str]]], filetype: str) -> str:
+    """
+    Get the MD5 hash for a given filetype from the item's download structure.
 
-def getSHA1(item, filetype):
-    for dl_str in item['download_struct']:
-        if dl_str['name'].lower() == filetype.lower() or dl_str['name'].lower() in weirdNamesExceptionList():
-            try:
-                return dl_str['sha1']
-            except KeyError as identifier:
-                return "n/a"
-    for dl_str in item['download_struct']:
-        if dl_str['name'].lower() in weirdNamesExceptionList():
-            try:
-                return dl_str['sha1']
-            except KeyError as identifier:
-                return "n/a"
-    log_error("New weird name detected: " + dl_str['name'])
-    try:
-        return dl_str['sha1']
-    except KeyError as identifier:
-        return "n/a"
+    Args:
+        item (Dict[str, List[Dict[str, str]]]): The item containing the download structure.
+        filetype (str): The filetype to search for.
 
-def weirdNamesExceptionList():
+    Returns:
+        str: The MD5 hash if found, 'n/a' otherwise.
+    """
+    dl_dict = {dl['name'].lower(): dl for dl in item['download_struct']}
+    weird_names = set(weird_names_exception_list())
+
+    # Check for exact match
+    if filetype.lower() in dl_dict:
+        return dl_dict[filetype.lower()].get('md5', 'n/a')
+
+    # Check for weird names
+    for weird_name in weird_names:
+        if weird_name in dl_dict:
+            return dl_dict[weird_name].get('md5', 'n/a')
+
+    # Log error for new weird name
+    if dl_dict:
+        log_error(f"New weird name detected: {next(iter(dl_dict.values()))['name']}")
+        return next(iter(dl_dict.values())).get('md5', 'n/a')
+
+    return 'n/a'
+
+def get_sha1(item: Dict[str, List[Dict[str, str]]], filetype: str) -> str:
+    """
+    Get the SHA1 hash for a given filetype from the item's download structure.
+
+    Args:
+        item (Dict[str, List[Dict[str, str]]]): The item containing the download structure.
+        filetype (str): The filetype to search for.
+
+    Returns:
+        str: The SHA1 hash if found, 'n/a' otherwise.
+    """
+    dl_dict = {dl['name'].lower(): dl for dl in item['download_struct']}
+    weird_names = set(weird_names_exception_list())
+
+    # Check for exact match or weird name
+    if filetype.lower() in dl_dict or filetype.lower() in weird_names:
+        return dl_dict[filetype.lower()].get('sha1', 'n/a')
+
+    # Check for any weird name
+    for weird_name in weird_names:
+        if weird_name in dl_dict:
+            return dl_dict[weird_name].get('sha1', 'n/a')
+
+    # Log error for new weird name
+    if dl_dict:
+        log_error(f"New weird name detected: {next(iter(dl_dict.values()))['name']}")
+        return next(iter(dl_dict.values())).get('sha1', 'n/a')
+
+    return 'n/a'
+
+def weird_names_exception_list():
     return ['download', 'supplement', 'mp3', 'companion file', 'installer', '.zip']
 
 def chunk_report(bytes_so_far, chunk_size, total_size):
@@ -329,10 +353,10 @@ def checksum_file(file_info):
     filetype = file_info['filetype'].lower()
     file_item = getItemObject(mname)
 
-    md5 = getMD5(file_item, filetype)
+    md5 = get_md5(file_item, filetype)
     md5res = md5check(file_info['path'], mname, md5)
 
-    sha1 = getSHA1(file_item, filetype)
+    sha1 = get_sha1(file_item, filetype)
     sha1res = sha1check(file_info['path'], mname, sha1)
 
     if (md5res['verdict'] and sha1res['verdict']):
