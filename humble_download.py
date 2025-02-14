@@ -176,7 +176,7 @@ def calculate_sha1(complete_filename_with_path):
 #
 def md5check(filepath, filename, org_checksum):
     try:
-        file_name = join(filepath, filename)
+        file_name = str(join(filepath, filename))
         print("MD5 checking: " + file_name)
         original_md5 = org_checksum
         calculated_md5 = calculate_md5(file_name)
@@ -198,7 +198,7 @@ def md5check(filepath, filename, org_checksum):
 
 def sha1check(filepath, filename, org_checksum):
     try:
-        file_name = join(filepath, filename)
+        file_name = str(join(filepath, filename))
         print("SHA1 checking: " + file_name)
         original_sha1 = org_checksum
         calculated_sha1 = calculate_sha1(file_name)
@@ -490,12 +490,12 @@ def move_file(file_info):
     filetype = file_info['filetype'].lower()
     filename = file_info['machine_name'] + "." + filetype
     subfolder = getSubfolderFromPlatform(file_info)
-    tempfile = join(DOWNLOAD_TEMP_PATH, file_info['machine_name'])
+    tempfile = str(join(DOWNLOAD_TEMP_PATH, file_info['machine_name']))
     if platform == "ebook":
-        path = join(PATH, "ebook/" + filetype)
+        path = str(join(PATH, "ebook/" + filetype))
     else:
-        path = join(PATH, subfolder)
-    finalpath = join(path, filename)
+        path = str(join(PATH, subfolder))
+    finalpath = str(join(path, filename))
     assure_path_exists(path)
     colorize("moving " + tempfile + " to its final resting place: " + finalpath, "blue")
     shutil.move(tempfile, finalpath)
@@ -529,7 +529,7 @@ def log_error(text):
         errorlog.writelines(logline + "\n")
 
 def getExistingFilesInFolder(platform):
-    head = join(PATH, platform + "/")
+    head = str(join(PATH, platform + "/"))
     if platform != "ebook":
         filelist = [f for f in listdir(head) if isfile(join(head, f))]
         return filelist
