@@ -244,7 +244,7 @@ def getURL(item, filetype):
             else:
                 return url
     colorize("Could not get URL from {} with {} extension".format(item['human_name'], filetype), "red")
-    log_error("Could not get URL from {} with {} extension".format(item['human_name'], filetype), "red")
+    log_error("Could not get URL from {} with {} extension".format(item['human_name'], filetype))
 
 def getHumanSize(item, filetype):
     for dl_str in item['download_struct']:
