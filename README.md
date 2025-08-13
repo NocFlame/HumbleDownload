@@ -29,6 +29,25 @@ and activate it `source ./myenv/bin/activate` (for linux)
 Currently, to change what files to download and what file integrity checks that should be done is handled manually.
 To choose what files to download (default is mobi,pdf,epub and zip), comment out respectively "master handler" in humble_download.py
 
+## Usage Examples
+Download everything (default behavior)
+`python humble_download.py`
+
+Download only books in quiet mode
+`python humble_download.py --books --quiet`
+
+Download only PDFs with verbose output
+`python humble_download.py --pdf --verbose`
+
+Dry run to see what would be downloaded
+`python humble_download.py --dry-run`
+
+Skip checksums for faster processing
+`python humble_download.py --ignore-downloaded-checksum`
+
+Download only epub files without verifying existing files
+`python humble_download.py --epub --no-checksum-on-local-files`
+
 ## TODO
 
 In no particular order there are lots of room for improvements and here are some of the ideas that possible will be implemented sometime
