@@ -617,7 +617,7 @@ group.add_argument('-v','--verbose', help='verbose output', action="store_true",
 parser.add_argument('-n','--no-checksum-on-local-files', help='Skips checksum checks for local files', action="store_true", required=False) # This should be paired with the 'verify_checksum_on_existing_files'
 parser.add_argument('-i','--ignore-downloaded-checksum', help='Skips checksum checks for downloaded files', action="store_true", required=False) # This should be paired with the 'force_move_file_that_failed_checksum'
 parser.add_argument('-d', '--dry-run', help='Does a dry run that skips actual download', action="store_true", required=False)
-parser.add_argument('-B', '--Books', help='Download only books', action="store_true", required=False) #All book formats ie using e,p,m switches
+parser.add_argument('-b', '--books', help='Download only books', action="store_true", required=False) #All book formats ie using e,p,m switches
 parser.add_argument('-e', '--epub', help='Download only epub books', action="store_true", required=False) #EPUB
 parser.add_argument('-p', '--pdf', help='Download only pdf books', action="store_true", required=False) #PDF
 parser.add_argument('-m', '--mobi', help='Download only mobi books', action="store_true", required=False) #MOBI
@@ -639,6 +639,9 @@ if isfile('data.json'):
 if not offline:
     print("Fetching your keys...")
     library_res = get_library()
+    if "Humble Bundle - Log In" in library_res.text:
+        colorize("Not logged in, is the correct cookie applied?", 'red')
+        sys.exit(1)
     keys = False
     if library_res.url != "https://www.humblebundle.com/login?goto=%2Fhome%2Flibrary&qs=":
         keys = extract_keys_from_library(library_res)
@@ -647,7 +650,7 @@ if not offline:
     if not keys:
         #raw_json.append(api_call(keys[0]))
         colorize("No keys found, is the correct cookie applied?", 'red')
-        exit(1)
+        sys.exit(1)
     if not args.quiet:
         colorize("Got {0} keys, getting data for each one".format(nbr_keys), 'green')
 
